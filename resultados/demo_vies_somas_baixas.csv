@@ -1,0 +1,5 @@
+Política,Avaliação,retorno_medio,vitorias_%,empates_%,derrotas_%
+Simples ≥20,"dict 12–21, padrão STICK (original)",-0.36216,29.709999999999997,4.364,65.926
+Simples ≥20,função completa (HIT < 12),-0.35042,29.742,5.473999999999999,64.78399999999999
+Estratégia básica,"dict 12–21, padrão STICK (original)",-0.13366,39.864,6.906,53.23
+Estratégia básica,função completa (HIT < 12),-0.04658,43.104,9.134,47.762
