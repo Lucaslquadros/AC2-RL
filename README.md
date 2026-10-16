@@ -46,8 +46,12 @@ jupyter lab            # abra notebooks/experimentos.ipynb e rode as células em
 
 ## A fazer pelo grupo
 
-- [ ] Definir **as duas (ou mais) políticas do grupo** (seção 3.1, dicionário `POLITICAS`) e justificar a lógica
-- [ ] Rodar o notebook completo e conferir `resultados/`
+- [x] Definir **as duas (ou mais) políticas do grupo** (seção 3.1, dicionário `POLITICAS`):
+      **"Imita o dealer (≥17)"** (copia a regra do próprio dealer) e **"Depende da carta do dealer"**
+      (se a carta do dealer estiver entre 2 e 5, para cedo com soma ≥12; com qualquer outra carta,
+      para com soma ≥17 — ideia baseada na observação dos heatmaps de política da seção 6).
+- [ ] Rodar o notebook completo (com as políticas novas) e conferir `resultados/` — **os CSVs/PNGs
+      atuais ainda são da versão anterior das políticas e precisam ser regenerados**
 - [ ] Escrever as conclusões (seção 8.3) e a análise da implementação × teoria
 - [ ] Montar o PPTX (`apresentacao/`) com os 3 itens do enunciado
 - [ ] Combinar a divisão de tarefas e revisar antes de 16/10

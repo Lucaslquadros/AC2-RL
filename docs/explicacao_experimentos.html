@@ -1,0 +1,1020 @@
+<title>Monte Carlo na Mesa — Guia dos Experimentos (Blackjack-v1)</title>
+<style>
+  /* ---------- tokens ---------- */
+  :root{
+    --bg:#F2F4EF;
+    --bg-elevated:#FFFFFF;
+    --ink:#16231C;
+    --ink-muted:#51605A;
+    --felt:#1B4332;
+    --felt-soft:#E4ECE4;
+    --gold:#8C6B22;
+    --gold-bright:#B9922F;
+    --red:#9C3A33;
+    --green-good:#3F7A54;
+    --rule:#DADFD5;
+    --shadow:0 1px 2px rgba(22,35,28,.07), 0 10px 28px -14px rgba(22,35,28,.22);
+    --font-display:"Bodoni MT","Didot","Noto Serif Display",Georgia,"Times New Roman",serif;
+    --font-body:"Seravek","Avenir Next","Segoe UI","Helvetica Neue",Arial,sans-serif;
+    --font-mono:"SF Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0E1A15;
+      --bg-elevated:#15241F;
+      --ink:#E9F0EA;
+      --ink-muted:#9FB3A8;
+      --felt:#2F6B4B;
+      --felt-soft:#1C332A;
+      --gold:#D9BC73;
+      --gold-bright:#E8CC86;
+      --red:#E08A82;
+      --green-good:#7FC79A;
+      --rule:#223A30;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 14px 34px -16px rgba(0,0,0,.65);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0E1A15; --bg-elevated:#15241F; --ink:#E9F0EA; --ink-muted:#9FB3A8;
+    --felt:#2F6B4B; --felt-soft:#1C332A; --gold:#D9BC73; --gold-bright:#E8CC86;
+    --red:#E08A82; --green-good:#7FC79A; --rule:#223A30;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 14px 34px -16px rgba(0,0,0,.65);
+  }
+  :root[data-theme="light"]{
+    --bg:#F2F4EF; --bg-elevated:#FFFFFF; --ink:#16231C; --ink-muted:#51605A;
+    --felt:#1B4332; --felt-soft:#E4ECE4; --gold:#8C6B22; --gold-bright:#B9922F;
+    --red:#9C3A33; --green-good:#3F7A54; --rule:#DADFD5;
+    --shadow:0 1px 2px rgba(22,35,28,.07), 0 10px 28px -14px rgba(22,35,28,.22);
+  }
+
+  /* ---------- reset-ish ---------- */
+  *,*::before,*::after{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{
+    font-family:var(--font-display);
+    font-weight:700;
+    line-height:1.12;
+    text-wrap:balance;
+    color:var(--ink);
+    margin:0;
+  }
+  p{margin:0 0 1em;}
+  p:last-child{margin-bottom:0;}
+  a{color:inherit;}
+  code{
+    font-family:var(--font-mono);
+    font-size:.88em;
+    background:var(--felt-soft);
+    padding:.1em .38em;
+    border-radius:4px;
+  }
+  em{color:var(--ink);}
+  strong{font-weight:700;}
+  ::selection{background:var(--gold); color:#1b1b14;}
+  :focus-visible{outline:2px solid var(--gold); outline-offset:3px;}
+  .suit-icon{width:1em;height:1em;display:inline-block;vertical-align:-.12em;fill:currentColor;}
+
+  /* ---------- skip link & progress ---------- */
+  .skip-link{
+    position:absolute; left:-999px; top:0; z-index:100;
+    background:var(--gold); color:#1b1b14; padding:.6em 1em; border-radius:0 0 6px 0;
+  }
+  .skip-link:focus{left:0;}
+  .progress{
+    position:fixed; top:0; left:0; height:3px; width:0%;
+    background:linear-gradient(90deg,var(--gold),var(--gold-bright));
+    z-index:90; transition:width .08s linear;
+  }
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto;}
+    .progress{transition:none;}
+  }
+
+  /* ---------- layout ---------- */
+  .layout{
+    display:grid;
+    grid-template-columns:252px minmax(0,1fr);
+    min-height:100vh;
+  }
+  @media (max-width:959px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  /* ---------- rail (fixed felt, independent of theme) ---------- */
+  .rail{
+    background:#102319;
+    color:#EEE7D6;
+    padding:1.6rem 1.4rem 2rem;
+    position:sticky; top:0; align-self:start; height:100vh;
+    overflow-y:auto;
+    border-right:1px solid #0a1510;
+  }
+  @media (max-width:959px){
+    .rail{position:static; height:auto; border-right:none; border-bottom:1px solid #0a1510;}
+  }
+  .rail-mark{
+    display:flex; align-items:center; gap:.55rem;
+    font-family:var(--font-display);
+    font-size:1.2rem; letter-spacing:.02em;
+    color:#F4EFDD; margin-bottom:1.4rem;
+  }
+  .rail-mark .suit-icon{width:1.3em; height:1.3em; color:#D9BC73;}
+  .rail-summary{
+    display:none;
+    cursor:pointer; list-style:none;
+    font-family:var(--font-display); font-size:1.05rem;
+    padding:.3rem 0 1rem;
+    color:#D9BC73;
+  }
+  .rail-summary::-webkit-details-marker{display:none;}
+  .rail-summary::after{content:"▾"; float:right;}
+  details[open] .rail-summary::after{content:"▴";}
+  @media (max-width:959px){
+    .rail-summary{display:block;}
+  }
+  .toc{margin:0; padding:0;}
+  .toc ol{list-style:none; margin:0; padding:0; counter-reset:folio;}
+  .toc li{counter-increment:folio;}
+  .toc a{
+    display:flex; gap:.65rem; align-items:baseline;
+    text-decoration:none; color:#C9D3C7;
+    padding:.46rem .3rem; border-radius:6px;
+    font-size:.88rem;
+    transition:background .15s ease, color .15s ease;
+  }
+  .toc a .no{
+    font-family:var(--font-mono); font-size:.78em; color:#6F8A7A;
+    min-width:1.4em;
+  }
+  .toc a:hover{background:rgba(217,188,115,.1); color:#F4EFDD;}
+  .toc a.active{color:#F4EFDD; background:rgba(217,188,115,.16);}
+  .toc a.active .no{color:var(--gold-bright, #E8CC86);}
+  .rail-meta{
+    margin-top:1.8rem; padding-top:1.2rem;
+    border-top:1px solid rgba(238,231,214,.14);
+    font-size:.74rem; color:#8CA596; letter-spacing:.03em;
+  }
+  .rail-meta strong{color:#C9D3C7; display:block; margin-bottom:.2rem; font-weight:600;}
+
+  /* ---------- content ---------- */
+  .content{padding:clamp(2rem,4vw,4.2rem) clamp(1.3rem,5vw,4.5rem) 6rem;}
+  .prose-col{max-width:68ch;}
+
+  .hero{max-width:74ch; margin-bottom:3.2rem;}
+  .hero .eyebrow{
+    display:inline-flex; align-items:center; gap:.5em;
+    font-family:var(--font-mono); font-size:.78rem; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--gold);
+    background:var(--felt-soft); padding:.35em .75em; border-radius:999px;
+    margin-bottom:1.1rem;
+  }
+  .hero h1{font-size:clamp(2.1rem,1.6rem + 2vw,2.95rem); margin-bottom:.6rem;}
+  .hero .lede{font-size:1.14rem; color:var(--ink-muted); max-width:62ch;}
+  .hero .badges{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.4rem;}
+  .hero .badges span{
+    font-size:.74rem; letter-spacing:.03em; font-family:var(--font-mono);
+    border:1px solid var(--rule); color:var(--ink-muted);
+    padding:.32em .7em; border-radius:999px;
+  }
+
+  .state-diagram{
+    display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+    margin-top:1.9rem; padding:1.1rem 1.2rem;
+    background:var(--bg-elevated); border:1px solid var(--rule); border-radius:10px;
+    box-shadow:var(--shadow);
+  }
+  .state-diagram .chip{
+    flex:1 1 140px;
+    border-left:3px solid var(--gold);
+    padding:.2rem .9rem;
+  }
+  .state-diagram .chip .k{
+    display:block; font-size:.7rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-muted); margin-bottom:.15rem;
+  }
+  .state-diagram .chip .v{
+    font-family:var(--font-mono); font-size:1.05rem; color:var(--ink);
+  }
+  .state-diagram .eq{
+    font-family:var(--font-display); font-size:1.3rem; color:var(--gold);
+    padding:0 .3rem;
+  }
+
+  .section{
+    max-width:74ch;
+    padding-top:3.1rem; margin-top:3.1rem;
+    border-top:1px solid var(--rule);
+    scroll-margin-top:1.5rem;
+  }
+  .section:first-of-type{border-top:none; margin-top:0; padding-top:0;}
+  .section .folio{
+    display:flex; align-items:center; gap:.6rem;
+    font-family:var(--font-mono); font-size:.8rem; color:var(--gold);
+    letter-spacing:.06em; text-transform:uppercase; margin-bottom:.6rem;
+  }
+  .section .folio .suit-icon{width:.95em; height:.95em;}
+  .section h2{font-size:clamp(1.5rem,1.3rem + .8vw,1.95rem); margin-bottom:1.1rem;}
+  .section h3{
+    font-size:1.2rem; margin-top:2rem; margin-bottom:.7rem; color:var(--ink);
+  }
+  .section > p, .section > ul, .section > ol{color:var(--ink);}
+  .section ul,.section ol{padding-left:1.3rem; margin:0 0 1em;}
+  .section li{margin-bottom:.5em;}
+  .section li:last-child{margin-bottom:0;}
+  .wide{max-width:none;}
+
+  .callout{
+    background:var(--felt-soft);
+    border-left:3px solid var(--felt);
+    border-radius:0 10px 10px 0;
+    padding:1rem 1.3rem;
+    margin:1.3rem 0;
+    font-size:.97rem;
+  }
+  .callout .tag{
+    display:flex; align-items:center; gap:.4em;
+    font-family:var(--font-mono); font-size:.72rem; text-transform:uppercase;
+    letter-spacing:.07em; color:var(--felt); margin-bottom:.45em; font-weight:600;
+  }
+  .callout .tag .suit-icon{color:var(--gold);}
+  :root[data-theme="dark"] .callout .tag{color:var(--gold-bright);}
+  @media (prefers-color-scheme: dark){ .callout .tag{color:var(--gold-bright);} }
+  :root[data-theme="light"] .callout .tag{color:var(--felt);}
+
+  .definition-grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:.9rem; margin:1.4rem 0;
+  }
+  .def{
+    background:var(--bg-elevated); border:1px solid var(--rule); border-radius:10px;
+    padding:1rem 1.1rem; box-shadow:var(--shadow);
+  }
+  .def dt{
+    display:flex; align-items:center; gap:.4em;
+    font-family:var(--font-display); font-weight:700; font-size:1.02rem;
+    margin-bottom:.35rem;
+  }
+  .def dt .suit-icon{width:.8em; height:.8em; color:var(--gold);}
+  .def dd{margin:0; font-size:.92rem; color:var(--ink-muted); line-height:1.55;}
+  .def dd code{font-size:.85em;}
+
+  /* ---------- tables ---------- */
+  .table-wrap{
+    overflow-x:auto; margin:1.5rem 0 1.8rem;
+    border:1px solid var(--rule); border-radius:10px;
+    box-shadow:var(--shadow); background:var(--bg-elevated);
+  }
+  table{border-collapse:collapse; width:100%; min-width:460px; font-size:.92rem;}
+  caption{
+    text-align:left; font-family:var(--font-mono); font-size:.74rem;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--ink-muted);
+    padding:.75rem 1rem .25rem;
+  }
+  thead th{
+    text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-muted); font-weight:600;
+    padding:.6rem 1rem; border-bottom:1px solid var(--rule);
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:.6rem 1rem; border-bottom:1px solid var(--rule);
+    vertical-align:middle;
+  }
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.best{background:var(--felt-soft);}
+  tbody tr.best td:first-child{
+    border-left:3px solid var(--gold); padding-left:calc(1rem - 3px);
+  }
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--font-mono);}
+  td.neg{color:var(--red);}
+  .pill{
+    display:inline-block; font-family:var(--font-mono); font-size:.68rem;
+    letter-spacing:.04em; text-transform:uppercase; color:var(--gold);
+    background:var(--felt-soft); border-radius:999px; padding:.2em .6em; margin-left:.5em;
+  }
+
+  .vbar{
+    display:flex; height:8px; width:150px; border-radius:999px; overflow:hidden;
+    background:var(--rule);
+  }
+  .vbar span{height:100%; display:block;}
+  .vbar .win{background:var(--green-good);}
+  .vbar .tie{background:var(--gold);}
+  .vbar .loss{background:var(--red); opacity:.75;}
+  .vbar-legend{
+    display:flex; gap:1.1rem; font-size:.74rem; color:var(--ink-muted);
+    margin:.6rem 0 0; align-items:center;
+  }
+  .vbar-legend i{display:inline-block; width:.7em; height:.7em; border-radius:2px; margin-right:.35em; vertical-align:-.08em;}
+
+  .filelist{margin:1.3rem 0 0; padding:0; list-style:none;}
+  .filelist li{
+    display:grid; grid-template-columns:minmax(180px,260px) 1fr; gap:1rem;
+    padding:.65rem 0; border-bottom:1px solid var(--rule); font-size:.92rem;
+  }
+  .filelist li:last-child{border-bottom:none;}
+  .filelist code{white-space:nowrap;}
+  .filelist .desc{color:var(--ink-muted);}
+  @media (max-width:640px){
+    .filelist li{grid-template-columns:1fr;}
+  }
+
+  .colophon{
+    max-width:74ch; margin-top:3.5rem; padding-top:1.8rem; border-top:1px solid var(--rule);
+    font-size:.84rem; color:var(--ink-muted);
+  }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="suit-diamond" viewBox="0 0 24 24">
+      <polygon points="12,2 20,12 12,22 4,12" />
+    </symbol>
+    <symbol id="suit-spade" viewBox="0 0 24 24">
+      <polygon points="12,2 4,15 20,15" />
+      <circle cx="8.4" cy="14.4" r="4.4" />
+      <circle cx="15.6" cy="14.4" r="4.4" />
+      <rect x="11" y="18" width="2" height="5.3" rx="1" />
+    </symbol>
+  </defs>
+</svg>
+
+<a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+<div class="progress" id="progress"></div>
+
+<div class="layout">
+  <aside class="rail">
+    <div class="rail-mark"><svg class="suit-icon"><use href="#suit-spade"></use></svg> Guia&nbsp;MC·21</div>
+    <details class="rail-toggle" open>
+      <summary class="rail-summary">Sumário</summary>
+      <nav class="toc" aria-label="Sumário">
+        <ol>
+          <li><a href="#glossario"><span class="no">0</span>Glossário rápido</a></li>
+          <li><a href="#contexto"><span class="no">1</span>Contexto do trabalho</a></li>
+          <li><a href="#ambiente"><span class="no">2</span>O ambiente Blackjack-v1</a></li>
+          <li><a href="#ajustes"><span class="no">3</span>Ajustes feitos e por quê</a></li>
+          <li><a href="#algoritmos"><span class="no">4</span>Os três algoritmos</a></li>
+          <li><a href="#politicas"><span class="no">5</span>Políticas comparadas</a></li>
+          <li><a href="#prediction"><span class="no">6</span>Resultados — Prediction</a></li>
+          <li><a href="#controle"><span class="no">7</span>Experimentos de controle</a></li>
+          <li><a href="#conclusoes"><span class="no">8</span>Conclusões</a></li>
+          <li><a href="#arquivos"><span class="no">9</span>Arquivos gerados</a></li>
+        </ol>
+      </nav>
+    </details>
+    <div class="rail-meta">
+      <strong>AC2 · Aprendizado por Reforço</strong>
+      Ibmec · Monte Carlo, Sutton &amp; Barto (2018), cap. 5 · Ambiente Blackjack-v1 (Gymnasium)
+    </div>
+  </aside>
+
+  <main class="content" id="conteudo">
+    <header class="hero">
+      <span class="eyebrow"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Guia explicativo</span>
+      <h1>Monte Carlo na mesa de Blackjack</h1>
+      <p class="lede">
+        Um guia, do zero, sobre o que o notebook de experimentos faz, por que algumas correções foram
+        necessárias, e o que os números realmente significam — para quem nunca viu Aprendizado por Reforço antes.
+      </p>
+      <div class="badges">
+        <span>AC2 · Ibmec</span>
+        <span>Blackjack-v1 · Gymnasium</span>
+        <span>First-Visit · ES · On-Policy ε-greedy</span>
+      </div>
+
+      <div class="state-diagram" aria-label="Estrutura de um estado no ambiente">
+        <div class="chip"><span class="k">Soma do jogador</span><span class="v">16</span></div>
+        <span class="eq">,</span>
+        <div class="chip"><span class="k">Carta do dealer</span><span class="v">10</span></div>
+        <span class="eq">,</span>
+        <div class="chip"><span class="k">Ás usável?</span><span class="v">False</span></div>
+      </div>
+    </header>
+
+    <!-- 0. GLOSSÁRIO -->
+    <section class="section" id="glossario">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 0</div>
+      <h2>Glossário rápido (para quem nunca viu RL)</h2>
+      <p>Onze termos que aparecem o tempo todo neste documento — explicados sem jargão, antes de qualquer coisa.</p>
+      <dl class="definition-grid">
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Episódio</dt>
+          <dd>Uma partida completa de Blackjack, do início ("comprar cartas") até o fim (ganhou/empatou/perdeu).</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Estado (s)</dt>
+          <dd>Uma "foto" da situação do jogador: <code>(soma das cartas, carta visível do dealer, ás flexível?)</code>. Ex.: <code>(16, 10, False)</code> = soma 16, dealer mostra 10, sem ás contando como 11.</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Ação (a)</dt>
+          <dd><code>STICK</code> (parar) ou <code>HIT</code> (comprar mais uma carta).</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Recompensa (r)</dt>
+          <dd>Só é paga no <strong>fim</strong> da partida: <code>+1</code> vitória, <code>0</code> empate, <code>−1</code> derrota. Durante o jogo, é sempre <code>0</code>.</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Retorno (G)</dt>
+          <dd>Soma das recompensas de um episódio, descontada por <code>γ</code>. Como só há recompensa no final, <code>G</code> é basicamente o resultado da partida.</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Política (π)</dt>
+          <dd>A "regra de decisão": para cada estado, diz qual ação tomar. Pode ser fixa ("parar com 20+") ou aprendida.</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>V(s)</dt>
+          <dd>Retorno esperado a partir do estado <code>s</code>, seguindo uma política. "Nessa situação, jogando do meu jeito, quanto espero ganhar em média?"</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Q(s,a)</dt>
+          <dd>Igual ao V(s), mas fixando também a primeira ação. "Se eu fizer <em>esta</em> ação primeiro, quanto espero ganhar depois?"</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>γ — fator de desconto</dt>
+          <dd>Entre 0 e 1; o quanto recompensas futuras valem menos que as imediatas. Em episódios curtos como o Blackjack, usa-se normalmente <code>γ = 1</code>.</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>ε — exploração</dt>
+          <dd>Em métodos ε-greedy, a probabilidade de tomar uma ação <strong>aleatória</strong> (explorar) em vez da melhor conhecida (aproveitar).</dd></div>
+        <div class="def"><dt><svg class="suit-icon"><use href="#suit-diamond"></use></svg>Monte Carlo (MC)</dt>
+          <dd>Família de métodos que estima V ou Q <strong>jogando muitas partidas completas</strong> e tirando a média dos resultados — sem conhecer as regras do jogo de antemão.</dd></div>
+      </dl>
+    </section>
+
+    <!-- 1. CONTEXTO -->
+    <section class="section" id="contexto">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 1</div>
+      <h2>Contexto do trabalho</h2>
+      <p>
+        Este é o trabalho AC2 da disciplina de Aprendizado por Reforço (Ibmec), sobre <strong>métodos de
+        Monte Carlo</strong> (Sutton &amp; Barto, 2018, capítulo 5), aplicados ao ambiente
+        <strong>Blackjack-v1</strong> da biblioteca Gymnasium.
+      </p>
+      <p>
+        O ponto de partida foi um notebook do professor
+        (<code>referencia/Aula_13_14_Monte_Carlo_RL_Didatico.ipynb</code>). O grupo reaproveitou as funções
+        desse notebook, <strong>corrigiu alguns problemas</strong> encontrados nele (Folio 3), e rodou uma
+        bateria de experimentos comparando três algoritmos e vários parâmetros.
+      </p>
+      <p>
+        O notebook principal é <code>notebooks/experimentos.ipynb</code>. Rodá-lo gera automaticamente
+        todas as tabelas (<code>.csv</code>) e gráficos (<code>.png</code>) da pasta <code>resultados/</code>,
+        prontos para os slides da apresentação.
+      </p>
+    </section>
+
+    <!-- 2. AMBIENTE -->
+    <section class="section" id="ambiente">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 2</div>
+      <h2>O ambiente: Blackjack-v1</h2>
+      <p>Regras resumidas (versão simplificada usada pelo ambiente, sem "dobrar" ou "dividir"):</p>
+      <ul>
+        <li>O jogador vê sua própria soma de cartas e <strong>uma única carta</strong> do dealer (a outra fica escondida).</li>
+        <li>A cada turno, o jogador escolhe <code>HIT</code> (compra carta) ou <code>STICK</code> (para).</li>
+        <li>Se a soma do jogador passar de 21, ele "estoura" e perde na hora.</li>
+        <li>Quando o jogador para, o dealer compra cartas automaticamente enquanto sua soma for menor que 17.</li>
+        <li>No final, compara-se quem ficou mais perto de 21 sem estourar.</li>
+        <li>Ás pode valer 1 ou 11 (quando vale 11 sem estourar, chama-se "ás usável/flexível").</li>
+      </ul>
+      <div class="callout">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Importante</div>
+        <p>
+          O estado considera três coisas: <code>(soma do jogador, carta do dealer, ás usável?)</code>. Como a
+          soma pode ir de 4 a 21, e a carta do dealer de 1 (ás) a 10, existem <strong>280 estados possíveis</strong>
+          (18 somas × 10 cartas, sem ás usável, mais 10 somas × 10 cartas, com ás usável). Isso é central para
+          o Experimento E (Folio 7.4) — um bug no notebook original ignorava boa parte desses estados.
+        </p>
+      </div>
+      <p>
+        A recompensa só existe no fim do episódio (<code>+1</code>/<code>0</code>/<code>−1</code>), e como se
+        usa <code>γ = 1</code>, <strong>todo estado visitado numa partida recebe o mesmo retorno</strong>: o
+        resultado final daquela partida.
+      </p>
+    </section>
+
+    <!-- 3. AJUSTES -->
+    <section class="section" id="ajustes">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 3</div>
+      <h2>Ajustes feitos em relação ao notebook do professor (e por quê)</h2>
+      <p>
+        O grupo leu o código original com cuidado e encontrou pontos que distorciam a comparação entre os
+        algoritmos. Todos foram corrigidos e estão marcados no notebook com <code># [ALTERADO]</code> ou
+        <code>[NOVO]</code>:
+      </p>
+      <ol>
+        <li>
+          <strong>Estados com soma &lt; 12 (o problema mais importante).</strong> O ambiente tem 280 estados
+          possíveis (somas de 4 a 21), mas o algoritmo "Exploring Starts" (ES) do notebook original só
+          sorteava estados com soma entre 12 e 21, e avaliava a política usando <code>STICK</code> (parar)
+          para qualquer estado "não aprendido" — ou seja, para somas abaixo de 12. Isso é um problema sério:
+          parar o jogo com 8, 9 ou 10 pontos é uma decisão péssima (na prática, você está desistindo de uma
+          mão em que ainda pode melhorar sem risco nenhum de estourar). Isso <strong>prejudicava
+          artificialmente o ES</strong> na comparação com o outro algoritmo, que aprendia esses estados. A
+          correção: o ES passou a sortear todos os 280 estados, e qualquer estado "não aprendido" usa
+          <code>HIT</code> como padrão quando a soma é menor que 12 (nunca estoura nesse caso). O efeito
+          numérico dessa correção está demonstrado nos Folios 6.2 e 7.4 — é grande.
+        </li>
+        <li>
+          <strong>Reprodutibilidade.</strong> O código original não fixava sementes aleatórias de forma
+          consistente. Aqui, todo experimento usa sementes fixas e roda com <strong>3 sementes diferentes</strong>
+          (ou 2 no modo rápido), reportando média ± erro padrão — porque uma única rodada de Monte Carlo tem
+          bastante variância (sorte do baralho).
+        </li>
+        <li>
+          <strong>"Primeira visita" calculada errado.</strong> O algoritmo <em>First-Visit</em> deve
+          considerar apenas a primeira vez que um estado aparece no episódio. No código original, o teste
+          rodava "de trás para frente" e acabava marcando a <em>última</em> ocorrência, não a primeira. Isso
+          foi corrigido. Na prática (Folio 6.1), <strong>nenhum estado se repete dentro de uma partida de
+          Blackjack</strong>, então First-Visit e Every-Visit dão exatamente o mesmo resultado aqui — o bug
+          não mudava os números finais, mas estava conceitualmente errado.
+        </li>
+        <li>
+          <strong>Métrica de desempenho.</strong> O notebook original media desempenho pela média (não
+          ponderada) dos valores V(s) estimados. Aqui, o desempenho de cada política é medido de forma mais
+          direta e realista: <strong>o retorno médio por partida jogada</strong> (± erro padrão), além das
+          porcentagens de vitória/empate/derrota — o que realmente importa para avaliar "essa política é boa?".
+        </li>
+        <li>
+          <strong>ε-greedy mais flexível.</strong> A implementação aceita tanto um <code>ε</code> fixo quanto
+          uma função de decaimento (reduzir ε ao longo do treino), com gerador aleatório de sementes
+          controladas.
+        </li>
+        <li>
+          <strong>Desempenho do código.</strong> Pequenas otimizações (evitar listas desnecessárias, checagem
+          de primeira visita mais rápida) — não muda os resultados, só a velocidade de execução.
+        </li>
+      </ol>
+    </section>
+
+    <!-- 4. ALGORITMOS -->
+    <section class="section" id="algoritmos">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 4</div>
+      <h2>Os três algoritmos estudados</h2>
+      <p>
+        Todos pertencem à família <em>Monte Carlo</em>: aprendem jogando muitas partidas completas e tirando
+        médias dos retornos observados — sem nunca precisar saber as probabilidades internas do jogo.
+      </p>
+
+      <h3>4.1 First-Visit MC Prediction <span class="pill">avalia</span></h3>
+      <p>
+        <em>"Eu já tenho uma política, quão boa ela é?"</em> Dada uma política <strong>fixa</strong> (por
+        exemplo, "pare só com 20 ou mais"), esse método estima V(s) para cada estado: joga muitas partidas, e
+        para cada estado, faz a média dos retornos observados <strong>a partir da primeira vez que aquele
+        estado apareceu</strong> em cada partida. É "prediction" porque não muda a política — só avalia o
+        quão boa ela é.
+      </p>
+
+      <h3>4.2 Monte Carlo com Exploring Starts (ES) <span class="pill">controla</span></h3>
+      <p>
+        <em>"Eu quero descobrir a melhor política, controlando o início."</em> Aqui o objetivo é
+        <strong>melhorar</strong> a política, não só avaliá-la. O problema é que, para aprender Q(s,a)
+        (quanto vale fazer a ação <code>a</code> no estado <code>s</code>), é preciso experimentar
+        <strong>todas</strong> as combinações de estado e ação — inclusive aquelas que uma política gulosa
+        normalmente nunca escolheria. A solução do ES é "trapacear" só no início: cada partida começa forçada
+        num par <code>(estado, ação)</code> sorteado aleatoriamente (um "início exploratório"). Depois do
+        primeiro passo, o jogo segue a política aprendida até ali. A cada atualização de Q, a política vira
+        imediatamente gulosa (escolhe sempre a ação de maior Q conhecido). Isso é o princípio de
+        <strong>Generalized Policy Iteration</strong> (GPI): avaliar e melhorar a política, alternadamente,
+        episódio a episódio.
+      </p>
+      <p>
+        Como o Gymnasium não deixa escolher livremente o estado inicial de uma partida, o notebook usa um
+        "wrapper" (<code>BlackjackES</code>) que força as cartas certas na mão do jogador e do dealer para
+        simular o início exato desejado.
+      </p>
+      <div class="callout">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Limitação prática do ES</div>
+        <p>
+          Ele só funciona porque estamos num simulador, onde é possível "forçar" o estado inicial de um
+          episódio. Numa situação real (um robô, por exemplo), isso geralmente é impossível. Por isso ES é
+          mais um recurso teórico/de simulação do que algo aplicável fora dela.
+        </p>
+      </div>
+
+      <h3>4.3 On-Policy First-Visit MC Control (ε-greedy) <span class="pill">controla</span></h3>
+      <p>
+        <em>"Eu quero melhorar a política, mas sem poder escolher o início."</em> Alternativa ao ES para o
+        mesmo objetivo, sem depender de poder forçar o estado inicial. A ideia: em vez de ser 100% gulosa, a
+        política usada para jogar é <strong>ε-soft</strong> — com probabilidade <code>1−ε</code> ela faz a
+        ação que parece melhor até agora ("aproveitamento"/<em>exploitation</em>), e com probabilidade
+        <code>ε</code> faz uma ação aleatória ("exploração"/<em>exploration</em>). Isso garante que, cedo ou
+        tarde, toda ação em todo estado acabe sendo experimentada, mesmo sem forçar o início.
+      </p>
+      <p>
+        Diferente do ES, aqui a melhoria da política é <strong>implícita</strong>: não existe um passo
+        separado de "agora eu atualizo a política" — o próximo episódio já usa automaticamente o Q mais
+        recente dentro da regra ε-greedy. Detalhe teórico importante: como a política continua ε-soft (nunca
+        100% gulosa), esse método converge para a <strong>melhor política ε-soft possível</strong>, não para
+        a política ótima "pura" (π*). Por isso, para comparar com as outras políticas, o notebook extrai e
+        avalia a política <strong>gulosa</strong> derivada do Q aprendido.
+      </p>
+    </section>
+
+    <!-- 5. POLÍTICAS -->
+    <section class="section wide" id="politicas">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 5</div>
+      <h2>As políticas comparadas (First-Visit MC Prediction)</h2>
+      <p class="prose-col">
+        Antes de aprender políticas do zero (ES e On-Policy), o grupo avaliou quatro políticas
+        <strong>fixas</strong>, como pontos de referência:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Política</th><th>Regra</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Simples ≥20</strong><br><span style="color:var(--ink-muted); font-size:.82em;">do professor</span></td><td>Só para (<code>STICK</code>) com soma 20 ou 21; compra carta (<code>HIT</code>) em qualquer outro caso. Baseline clássico do livro-texto, propositalmente ruim.</td></tr>
+            <tr><td><strong>Conservadora ≥17</strong></td><td>Imita a regra do próprio dealer: compra carta enquanto a soma for menor que 17.</td></tr>
+            <tr><td><strong>Estratégia básica</strong></td><td>Aproximação da estratégia básica real de Blackjack (sem dobrar/dividir): considera ás flexível e se a carta do dealer é "fraca" (2–6) ou "forte" (7–10/A).</td></tr>
+            <tr><td><strong>Aleatória 50/50</strong></td><td>Decide <code>HIT</code> ou <code>STICK</code> por sorteio, 50% de chance cada. Baseline "burro" de comparação.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="prose-col">
+        Detalhe de implementação a notar: no ambiente, o <strong>ás do dealer aparece codificado como o
+        número 1</strong>. Um teste ingênuo tipo <code>dealer &gt;= 7</code> trataria o ás como "carta fraca",
+        o que é errado (ás é das cartas mais fortes para o dealer). Por isso o código trata explicitamente a
+        faixa <code>2 &lt;= dealer &lt;= 6</code> como "dealer fraco".
+      </p>
+    </section>
+
+    <!-- 6. RESULTADOS PREDICTION -->
+    <section class="section wide" id="prediction">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 6</div>
+      <h2>Resultados — First-Visit MC Prediction</h2>
+
+      <h3 class="prose-col">6.1 Verificação: First-Visit é igual a Every-Visit neste jogo?</h3>
+      <p class="prose-col">
+        O grupo rodou 50.000 partidas com duas políticas diferentes e contou quantas tiveram algum estado
+        repetido dentro do mesmo episódio:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Política</th><th class="num">Episódios com estado repetido (de 50.000)</th></tr></thead>
+          <tbody>
+            <tr><td>Aleatória 50/50</td><td class="num">0</td></tr>
+            <tr><td>Conservadora ≥17</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Conclusão em linguagem simples</div>
+        <p>
+          Numa partida de Blackjack, como a soma do jogador só pode aumentar (ou a partida acaba), o mesmo
+          estado nunca se repete dentro de uma partida. Por isso, "olhar só a primeira visita" e "olhar todas
+          as visitas" dão exatamente o mesmo resultado aqui — a distinção teórica entre os dois métodos
+          simplesmente não faz diferença neste jogo específico.
+        </p>
+      </div>
+
+      <h3 class="prose-col">6.2 Demonstração do viés causado por ignorar somas &lt; 12</h3>
+      <p class="prose-col">
+        Mesma política avaliada de duas formas: (a) do jeito do notebook original — só guardando decisões
+        para somas 12–21 e usando <code>STICK</code> para qualquer soma menor, e (b) do jeito corrigido — com
+        a política completa, decidindo <code>HIT</code> normalmente abaixo de 12.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Política</th><th>Avaliação</th><th class="num">Retorno médio</th><th class="num">Vitórias</th><th class="num">Empates</th><th class="num">Derrotas</th></tr></thead>
+          <tbody>
+            <tr><td>Simples ≥20</td><td>original (STICK &lt; 12)</td><td class="num neg">−0,362</td><td class="num">29,7%</td><td class="num">4,4%</td><td class="num">65,9%</td></tr>
+            <tr><td>Simples ≥20</td><td>corrigida (HIT &lt; 12)</td><td class="num neg">−0,350</td><td class="num">29,7%</td><td class="num">5,5%</td><td class="num">64,8%</td></tr>
+            <tr><td>Estratégia básica</td><td>original (STICK &lt; 12)</td><td class="num neg"><strong>−0,134</strong></td><td class="num">39,9%</td><td class="num">6,9%</td><td class="num">53,2%</td></tr>
+            <tr class="best"><td>Estratégia básica</td><td>corrigida (HIT &lt; 12)</td><td class="num neg"><strong>−0,047</strong></td><td class="num">43,1%</td><td class="num">9,1%</td><td class="num">47,8%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          Para "Simples ≥20" (já ruim, pois compra carta até chegar em 19 de qualquer jeito), o bug quase não
+          muda nada. Mas para uma política boa ("Estratégia básica"), o bug é muito prejudicial: o retorno
+          médio quase <strong>triplica de ruim</strong> (de −0,047 para −0,134) só porque, em estados de soma
+          baixa, a versão "errada" manda parar o jogo em vez de comprar carta — um erro grosseiro que nenhum
+          jogador humano cometeria. O bug original não é um detalhe menor: ele distorce bastante a avaliação
+          de políticas boas.
+        </p>
+      </div>
+
+      <h3 class="prose-col">6.3 Desempenho das quatro políticas (200.000 episódios cada)</h3>
+      <div class="table-wrap">
+        <table>
+          <caption>Ordenado do melhor para o pior retorno médio</caption>
+          <thead><tr><th>Política</th><th class="num">Retorno médio</th><th class="num">Erro padrão</th><th>Vitória · Empate · Derrota</th></tr></thead>
+          <tbody>
+            <tr class="best">
+              <td><strong>Estratégia básica</strong></td>
+              <td class="num neg"><strong>−0,0406</strong></td>
+              <td class="num">0,0021</td>
+              <td>
+                <div class="vbar"><span class="win" style="width:43.46%"></span><span class="tie" style="width:9.02%"></span><span class="loss" style="width:47.52%"></span></div>
+              </td>
+            </tr>
+            <tr>
+              <td>Conservadora ≥17</td>
+              <td class="num neg">−0,0728</td>
+              <td class="num">0,0021</td>
+              <td><div class="vbar"><span class="win" style="width:41.26%"></span><span class="tie" style="width:10.20%"></span><span class="loss" style="width:48.54%"></span></div></td>
+            </tr>
+            <tr>
+              <td>Simples ≥20 (professor)</td>
+              <td class="num neg">−0,3519</td>
+              <td class="num">0,0020</td>
+              <td><div class="vbar"><span class="win" style="width:29.64%"></span><span class="tie" style="width:5.54%"></span><span class="loss" style="width:64.82%"></span></div></td>
+            </tr>
+            <tr>
+              <td>Aleatória 50/50</td>
+              <td class="num neg">−0,3962</td>
+              <td class="num">0,0020</td>
+              <td><div class="vbar"><span class="win" style="width:28.12%"></span><span class="tie" style="width:4.15%"></span><span class="loss" style="width:67.74%"></span></div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="vbar-legend" style="padding:0 1rem 1rem;">
+          <span><i style="background:var(--green-good)"></i>vitória</span>
+          <span><i style="background:var(--gold)"></i>empate</span>
+          <span><i style="background:var(--red); opacity:.75"></i>derrota</span>
+        </div>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          Em Blackjack, até a melhor estratégia possível perde dinheiro em média a longo prazo (a "vantagem
+          da casa" é inerente ao jogo) — por isso todos os retornos médios são negativos. O que importa é a
+          comparação <strong>relativa</strong>: a "Estratégia básica" é claramente a melhor das quatro,
+          seguida pela "Conservadora ≥17". "Simples ≥20" e "Aleatória 50/50" são bem piores — parar de
+          comprar cartas só com 20+ é uma estratégia ruim, e jogar por sorteio é ainda pior.
+        </p>
+      </div>
+      <p class="prose-col">
+        Os heatmaps gerados (<code>resultados/fv_heatmap_*.png</code>) mostram visualmente V(s) para cada
+        política, separando "com ás usável" e "sem ás usável", cruzando a soma do jogador (eixo vertical) com
+        a carta do dealer (eixo horizontal). O gráfico
+        <code>resultados/fv_convergencia_estados_chave.png</code> mostra como a estimativa de V(s) em alguns
+        estados específicos vai se estabilizando à medida que mais episódios são simulados — um exemplo
+        visual da Lei dos Grandes Números em ação.
+      </p>
+    </section>
+
+    <!-- 7. EXPERIMENTOS DE CONTROLE -->
+    <section class="section wide" id="controle">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 7</div>
+      <h2>Experimentos de controle: ES × On-Policy ε-greedy</h2>
+      <p class="prose-col">
+        Protocolo usado em todos os experimentos: cada configuração é treinada com <strong>3 sementes
+        diferentes</strong>, avaliada em <em>checkpoints</em> (de 5 mil até 200 mil episódios de treino) e, ao
+        final, avaliada com 50.000 partidas de teste. Os números abaixo são médias entre as 3 sementes
+        (± erro padrão/desvio).
+      </p>
+
+      <h3 class="prose-col">7.1 Experimento B — ES vs On-Policy, variando ε</h3>
+      <p class="prose-col">
+        Pergunta: <strong>ES (que precisa de início forçado) aprende uma política tão boa quanto o On-Policy
+        ε-greedy (que não precisa)? Qual ε funciona melhor?</strong>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Configuração</th><th class="num">Retorno médio final</th><th class="num">Desvio entre sementes</th><th class="num">Vitórias</th><th class="num">Empates</th><th class="num">Derrotas</th></tr></thead>
+          <tbody>
+            <tr class="best"><td><strong>ES</strong></td><td class="num neg"><strong>−0,0411</strong></td><td class="num">0,0071</td><td class="num">43,49%</td><td class="num">8,90%</td><td class="num">47,61%</td></tr>
+            <tr><td>On-Policy ε=0,01</td><td class="num neg">−0,0720</td><td class="num">0,0013</td><td class="num">42,33%</td><td class="num">8,15%</td><td class="num">49,53%</td></tr>
+            <tr><td>On-Policy ε=0,05</td><td class="num neg">−0,0496</td><td class="num">0,0036</td><td class="num">43,23%</td><td class="num">8,57%</td><td class="num">48,19%</td></tr>
+            <tr><td>On-Policy ε=0,1</td><td class="num neg"><strong>−0,0453</strong></td><td class="num">0,0018</td><td class="num">43,41%</td><td class="num">8,65%</td><td class="num">47,94%</td></tr>
+            <tr><td>On-Policy ε=0,2</td><td class="num neg">−0,0477</td><td class="num">0,0011</td><td class="num">43,42%</td><td class="num">8,39%</td><td class="num">48,19%</td></tr>
+            <tr><td>On-Policy ε=0,4</td><td class="num neg">−0,0510</td><td class="num">0,0072</td><td class="num">43,43%</td><td class="num">8,04%</td><td class="num">48,53%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <ul style="margin-bottom:0;">
+          <li>O <strong>ES</strong> termina com o melhor resultado (−0,0411), mas também é o que mais varia
+          entre sementes (desvio 0,0071) — depende mais de "sorte" na hora de explorar.</li>
+          <li>Dentro do On-Policy, <strong>ε muito pequeno (0,01) é o pior resultado</strong>: o agente
+          explora pouco e fica "preso" perto do que já conhece.</li>
+          <li><strong>ε=0,1 é o melhor ponto do On-Policy</strong>: explora o suficiente sem desperdiçar
+          jogadas demais em ações aleatórias ruins.</li>
+          <li><strong>ε grande demais (0,4) piora de novo</strong>: 40% do tempo jogando aleatoriamente
+          mesmo depois de já ter aprendido o suficiente.</li>
+          <li>Existe um "ponto ideal" de exploração — o clássico dilema <strong>exploração × aproveitamento</strong>.</li>
+        </ul>
+      </div>
+      <p class="prose-col">
+        O gráfico <code>resultados/exp_efeito_epsilon.png</code> mostra essa curva em formato de "U": o
+        desempenho piora nas pontas (ε muito baixo ou muito alto) e melhora no meio. O gráfico
+        <code>resultados/exp_curvas_aprendizado.png</code> mostra como cada configuração evolui ao longo do
+        treino (escala log, 5 mil a 200 mil episódios).
+      </p>
+
+      <h3 class="prose-col">7.2 Experimento C — decaimento de ε</h3>
+      <p class="prose-col">
+        Ideia testada: começar com ε=0,5 (bastante exploração no início) e reduzir linearmente até ε=0,01
+        (quase só aproveitamento, perto do fim do treino) — "o melhor dos dois mundos".
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Configuração</th><th class="num">Retorno médio final</th><th class="num">Desvio entre sementes</th></tr></thead>
+          <tbody>
+            <tr><td>On-Policy ε linear 0,5→0,01</td><td class="num neg">−0,0503</td><td class="num"><strong>0,0005</strong></td></tr>
+            <tr class="best"><td>On-Policy ε=0,1 fixo</td><td class="num neg"><strong>−0,0453</strong></td><td class="num">0,0018</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          O decaimento <strong>não superou</strong> o ε fixo em 0,1 — ficou ligeiramente pior em retorno
+          médio, embora bem mais estável entre sementes (desvio de apenas 0,0005, o mais baixo de todos os
+          experimentos). Para este jogo relativamente simples (poucos estados, episódios curtos), ε=0,1 fixo
+          já é "bom o suficiente" durante todo o treino.
+        </p>
+      </div>
+
+      <h3 class="prose-col">7.3 Experimento D — efeito do fator de desconto γ</h3>
+      <p class="prose-col">
+        Ideia testada: em vez do padrão γ=1 (recompensas futuras valem o mesmo que imediatas), testar γ=0,9
+        (recompensas mais distantes valem um pouco menos).
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Configuração</th><th class="num">Retorno médio final</th><th class="num">Desvio entre sementes</th></tr></thead>
+          <tbody>
+            <tr><td>ES (γ=1)</td><td class="num neg">−0,0411</td><td class="num">0,0071</td></tr>
+            <tr><td>ES γ=0,9</td><td class="num neg">−0,0429</td><td class="num">0,0037</td></tr>
+            <tr><td>On-Policy ε=0,1 (γ=1)</td><td class="num neg">−0,0453</td><td class="num">0,0018</td></tr>
+            <tr><td>On-Policy ε=0,1 γ=0,9</td><td class="num neg">−0,0446</td><td class="num">0,0068</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          A diferença entre γ=1 e γ=0,9 é pequena nos dois algoritmos — esperado, já que no Blackjack os
+          episódios são curtos e a recompensa só existe no final. Com γ=0,9, cada <code>HIT</code> adicional
+          "desconta" um pouco o valor do resultado final, incentivando levemente parar mais cedo — mas o
+          efeito prático é pequeno. γ=1 é a escolha natural para episódios curtos como este.
+        </p>
+      </div>
+
+      <h3 class="prose-col">7.4 Experimento E — o quanto o bug original realmente prejudicava o ES</h3>
+      <p class="prose-col">
+        Isola e mede exatamente o impacto do bug descrito no Folio 3 (item 1), comparando três variantes do
+        mesmo algoritmo ES:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variante</th><th class="num">Retorno médio</th><th class="num">Desvio</th></tr></thead>
+          <tbody>
+            <tr><td>ES original (sorteia só 12–21; STICK nos demais)</td><td class="num neg"><strong>−0,1334</strong></td><td class="num">0,0024</td></tr>
+            <tr><td>ES sorteia 12–21, mas usa HIT abaixo de 12</td><td class="num neg">−0,0402</td><td class="num">0,0038</td></tr>
+            <tr class="best"><td><strong>ES corrigido (sorteia os 280 estados, 4–21)</strong></td><td class="num neg"><strong>−0,0411</strong></td><td class="num">0,0071</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          Confirmação direta do problema do Folio 3: o ES "do jeito que estava" tem desempenho
+          <strong>mais de 3× pior</strong> (−0,1334) do que o corrigido (−0,0411) — e a causa não é o
+          algoritmo em si, é a política "de reserva" usada para estados não aprendidos: mandar
+          <code>STICK</code> com soma baixa é uma decisão horrível que nenhuma pessoa tomaria. Curiosamente, a
+          segunda variante já chega quase no mesmo patamar do corrigido — isto é, <strong>a maior parte do
+          problema vinha do valor padrão usado para estados não aprendidos</strong>, não de deixar de sortear
+          estados abaixo de 12. Boa lição de depuração: às vezes o bug não está no algoritmo principal, mas
+          num detalhe pequeno que passa despercebido.
+        </p>
+      </div>
+
+      <h3 class="prose-col">7.5 Divergência entre as políticas aprendidas</h3>
+      <p class="prose-col">
+        Depois de treinar ES e On-Policy (ε=0,1), o grupo comparou, estado por estado (os 200 estados com
+        soma entre 12 e 21), em quantos deles cada par de políticas discorda sobre a ação a tomar:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Comparação</th><th class="num">% dos estados em que discordam</th></tr></thead>
+          <tbody>
+            <tr><td>ES × On-Policy</td><td class="num">13,5%</td></tr>
+            <tr class="best"><td>ES × Estratégia básica</td><td class="num"><strong>3,5%</strong></td></tr>
+            <tr><td>On-Policy × Estratégia básica</td><td class="num">11,0%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout prose-col">
+        <div class="tag"><svg class="suit-icon"><use href="#suit-spade"></use></svg>Leitura em linguagem simples</div>
+        <p>
+          O ES aprendeu uma política mais parecida com a "Estratégia básica" de referência (3,5% de
+          discordância) do que o On-Policy (11,0%) — coerente com o Experimento B, onde o ES teve o melhor
+          retorno médio. As discordâncias que sobram aparecem principalmente em <strong>estados raros</strong>,
+          onde há pouquíssimas partidas de treino para calibrar bem a decisão — <strong>ruído amostral</strong>:
+          com poucas observações, a média calculada pode não refletir ainda o valor real.
+        </p>
+      </div>
+      <p class="prose-col">
+        Os arquivos <code>resultados/politica_es.png</code> e <code>resultados/politica_onpolicy_eps01.png</code>
+        mostram visualmente (verde = HIT, vermelho = STICK) a política aprendida por cada algoritmo. Os
+        arquivos <code>resultados/v_es.png</code> e <code>resultados/v_onpolicy_eps01.png</code> mostram os
+        valores V(s) ≈ max Q(s,a) aprendidos por cada um.
+      </p>
+    </section>
+
+    <!-- 8. CONCLUSÕES -->
+    <section class="section" id="conclusoes">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 8</div>
+      <h2>Resumo das principais conclusões</h2>
+      <ol>
+        <li><strong>O ambiente tem 280 estados</strong>, não só os 200 (somas 12–21) que o notebook original
+          considerava — isso importa principalmente para o ES, cujo desempenho <strong>triplicou</strong>
+          (de −0,1334 para −0,0411) só com a correção.</li>
+        <li><strong>First-Visit = Every-Visit neste jogo específico</strong>, porque nenhum estado se repete
+          dentro de uma partida — a distinção teórica existe, mas não muda nenhum número aqui.</li>
+        <li>Entre as políticas fixas, a <strong>Estratégia básica</strong> é a melhor (−0,041), bem à frente
+          da política "ingênua" do professor (−0,352) e da aleatória (−0,396).</li>
+        <li><strong>ES e On-Policy ε-greedy chegam a desempenhos parecidos</strong> (entre −0,04 e −0,05)
+          depois de corrigidos — mas usam estratégias bem diferentes: ES "trapaceia" controlando o início de
+          cada episódio (só possível em simulação), enquanto On-Policy explora de forma mais realista com
+          ε-greedy (aplicável também fora de simuladores).</li>
+        <li>Existe um <strong>ε ideal (≈ 0,1)</strong> para o On-Policy: muito pouco (0,01) ou muito (0,4) de
+          exploração pioram o resultado — o dilema exploração × aproveitamento.</li>
+        <li>O <strong>decaimento de ε</strong> testado não superou o ε fixo em 0,1 neste caso — mas tornou o
+          aprendizado mais consistente entre sementes.</li>
+        <li>O <strong>fator de desconto γ</strong> teve efeito pequeno (1,0 vs 0,9), como esperado em
+          episódios curtos como o Blackjack, onde γ=1 é a escolha natural.</li>
+        <li>As políticas aprendidas e a Estratégia básica divergem principalmente em <strong>estados
+          raros</strong>, onde há pouco treino para calibrar bem a decisão.</li>
+      </ol>
+    </section>
+
+    <!-- 9. ARQUIVOS -->
+    <section class="section" id="arquivos">
+      <div class="folio"><svg class="suit-icon"><use href="#suit-diamond"></use></svg> Folio 9</div>
+      <h2>Onde encontrar cada arquivo gerado</h2>
+      <p>
+        Todos os arquivos abaixo são criados automaticamente ao rodar <code>notebooks/experimentos.ipynb</code>
+        (ficam em <code>resultados/</code>):
+      </p>
+      <ul class="filelist">
+        <li><code>demo_vies_somas_baixas.csv</code><span class="desc">Tabela do Folio 6.2 (viés ao avaliar com dict 12–21 vs função completa)</span></li>
+        <li><code>fv_desempenho_politicas.csv</code><span class="desc">Tabela do Folio 6.3 (desempenho das 4 políticas fixas)</span></li>
+        <li><code>fv_heatmap_*.png</code><span class="desc">Heatmaps de V(s) de cada política fixa</span></li>
+        <li><code>fv_convergencia_estados_chave.png</code><span class="desc">Convergência de V(s) em 3 estados-chave, ao longo do treino</span></li>
+        <li><code>exp_curvas_aprendizado.png</code><span class="desc">Curvas de aprendizado do Experimento B (ES × On-Policy, vários ε)</span></li>
+        <li><code>exp_efeito_epsilon.png</code><span class="desc">Gráfico "efeito de ε" do Experimento B</span></li>
+        <li><code>exp_E_vies_somas_baixas.csv</code><span class="desc">Tabela do Experimento E (Folio 7.4)</span></li>
+        <li><code>resumo_experimentos.csv</code><span class="desc">Tabela consolidada dos experimentos B/C/D (Folios 7.1–7.3)</span></li>
+        <li><code>experimentos_final_por_seed.csv</code><span class="desc">Mesma coisa, sem agregar — uma linha por semente</span></li>
+        <li><code>experimentos_curvas.csv</code><span class="desc">Dados brutos das curvas de aprendizado (todas as configurações, todos os checkpoints)</span></li>
+        <li><code>divergencia_politicas.csv</code><span class="desc">Tabela do Folio 7.5</span></li>
+        <li><code>politica_es.png</code>, <code>politica_onpolicy_eps01.png</code><span class="desc">Heatmaps das políticas aprendidas por ES e On-Policy</span></li>
+        <li><code>v_es.png</code>, <code>v_onpolicy_eps01.png</code><span class="desc">Heatmaps de V(s) aprendidos por ES e On-Policy</span></li>
+        <li><code>politicas_aprendidas.csv</code><span class="desc">Ação (HIT/STICK) de cada política, estado a estado, para os 280 estados</span></li>
+        <li><code>valores_V_por_estado.csv</code><span class="desc">V(s) de cada política/algoritmo, estado a estado</span></li>
+        <li><code>verificacoes.csv</code><span class="desc">Checagens de sanidade do código (ex.: Folio 6.1)</span></li>
+      </ul>
+      <p style="margin-top:1.4rem;">
+        Para rodar tudo de novo: siga as instruções do <code>README.md</code> do projeto (criar o ambiente
+        virtual Python, instalar <code>requirements.txt</code>, abrir <code>notebooks/experimentos.ipynb</code>
+        no Jupyter e rodar as células em ordem). Existe um "modo rápido" (<code>MC_RAPIDO=1</code>) que faz
+        tudo em ~1–2 minutos, com números menos precisos — útil só para testar se o código roda sem erros, não
+        para os resultados finais da apresentação (que usam o modo completo, ~20–25 minutos).
+      </p>
+    </section>
+
+    <footer class="colophon">
+      Guia produzido a partir de <code>notebooks/experimentos_executado.ipynb</code> — trabalho AC2,
+      Aprendizado por Reforço, Ibmec. Todos os números acima vêm da execução real do notebook.
+    </footer>
+  </main>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var bar = document.getElementById("progress");
+  function updateProgress(){
+    var h = document.documentElement;
+    var scrollTop = h.scrollTop || document.body.scrollTop;
+    var height = (h.scrollHeight || document.body.scrollHeight) - h.clientHeight;
+    var pct = height > 0 ? (scrollTop / height) * 100 : 0;
+    if (bar) bar.style.width = pct + "%";
+  }
+  var ticking = false;
+  window.addEventListener("scroll", function(){
+    if (!ticking){
+      window.requestAnimationFrame(function(){ updateProgress(); ticking = false; });
+      ticking = true;
+    }
+  }, { passive: true });
+  updateProgress();
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc a"));
+  var sections = links.map(function(a){
+    return document.getElementById(a.getAttribute("href").slice(1));
+  }).filter(Boolean);
+
+  if ("IntersectionObserver" in window && sections.length){
+    var byId = {};
+    links.forEach(function(a){ byId[a.getAttribute("href").slice(1)] = a; });
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        var link = byId[entry.target.id];
+        if (!link) return;
+        if (entry.isIntersecting){
+          links.forEach(function(l){ l.classList.remove("active"); });
+          link.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-10% 0px -70% 0px", threshold: 0 });
+    sections.forEach(function(s){ observer.observe(s); });
+  }
+})();
+</script>
